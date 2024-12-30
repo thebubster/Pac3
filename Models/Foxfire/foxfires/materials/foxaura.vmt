@@ -1,0 +1,21 @@
+"vertexlitgeneric"
+{
+	"$basetexture" models\bumpattack\foxfires\foxaura
+	"$nodecal" "1"
+	"$surfaceprop" "no_decal"
+
+	"$phong" "1"
+	"$phongexponent" "1.5"
+	"$phongboost" "0.5"
+	"$phongfresnelranges"	"[0.25 1 4]"
+	"$basemapalphaphongmask" "1"
+
+	// Rim lighting parameters
+	"$rimlight" "1"												// To enable rim lighting (requires phong)
+	"$rimlightexponent" "1"									// Exponent for phong component of rim lighting	
+	"$rimlightboost" "1.5"										// Boost for ambient cube component of rim lighting
+
+	"$lightwarptexture"  models\bumpattack\foxfires\aura_lightwarp
+
+	"$selfillum" 1
+	

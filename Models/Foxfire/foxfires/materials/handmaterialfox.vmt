@@ -1,0 +1,7 @@
+"vertexlitgeneric"
+{
+	"$basetexture" models\bumpattack\foxfires\handmaterialfox
+	"$surfaceprop" "flesh"
+	"$alphatest" 1
+	"$alpha" 0
+}

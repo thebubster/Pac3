@@ -1,0 +1,48 @@
+local List = {}
+
+List.__index = List
+
+function List:new()
+    local list = {}
+
+    list.content = {}
+    list.removed = 0
+    list.count = 0
+
+    setmetatable( list, self )
+
+    return list
+end
+
+function List:add( obj )
+    self.count = self.count + 1
+
+    local index = table.insert( self.content, obj )
+    local indexObj = {
+        index = index,
+        removed = self.removed,
+        list = self,
+        getIndex = function( id )
+            return id.index - ( id.list.removed - id.removed )
+        end
+    }
+
+    if self.onAdded then self:onAdded( obj, indexObj ) end
+
+    return indexObj
+end
+
+function List:remove( id )
+    local realIndex = id:getIndex()
+
+    self.removed = self.removed + 1
+    self.count = self.count - 1
+
+    local obj = table.remove( self.content, realIndex )
+
+    if self.onRemoved then self:onRemoved( obj, realIndex ) end
+
+    return obj
+end
+
+return List

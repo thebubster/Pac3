@@ -1,0 +1,41 @@
+--@includedir updates
+
+Data = {}
+
+local dataFilePath = "whiskey/data.txt"
+local dataFileVersion = "0.1.0"
+
+local dataFolder = string.match( dataFilePath, "(.+)/[^/]+$" )
+local backupFolder = dataFolder .. "/backups"
+
+local defaultData = {
+    removed = 0,
+    music = {},
+    playlists = {},
+    version = dataFileVersion
+}
+
+file.createDir( dataFolder )
+file.createDir( backupFolder )
+
+if not file.exists( dataFilePath ) then
+    file.write( dataFilePath, json.encode( defaultData, true ) )
+else
+    local data = json.decode( file.read( dataFilePath ) )
+
+    data.version = data.version or "0.0.0"
+
+    while data.version ~= dataFileVersion do
+        file.write( backupFolder .. "/backup_" .. data.version .. ".txt", json.encode( data, true ) )
+
+        data = require( "updates/update_" .. data.version .. ".txt" )( data, dataFilePath )
+    end
+
+    file.write( dataFilePath, json.encode( data, true ) )
+
+    Data = data
+end
+
+function SaveData()
+    file.write( dataFilePath, json.encode( Data, true ) )
+end

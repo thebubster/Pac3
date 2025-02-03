@@ -1,0 +1,110 @@
+--@includedir tabs
+
+local bgColor = Color( 45, 45, 45 )
+local fgColor = Color( 65, 65, 65 )
+
+local timeFont = render.createFont( "Trebuchet", 32, 400, true )
+
+local tabOpen = false
+local tabId = 1
+local tabHeight = -352
+
+function closeTab()
+    tabOpen = false
+end
+
+local tabs = {
+    require( "tabs/playlists.txt" ),
+    require( "tabs/addition.txt" )
+}
+
+for _, tab in ipairs( tabs ) do
+    tab.color = 75
+end
+
+local cursorX, cursorY = -512, -512
+
+local function drawTabs()
+    cursorX, cursorY = render.cursorPos()
+    cursorX, cursorY = cursorX or -512, cursorY or -512
+
+    local hoveredTab
+
+    if Vector( cursorX, cursorY ):withinAABox( Vector( 0, 0 ), Vector( 384, 32 ) ) then
+        hoveredTab = math.floor( cursorX / 128 ) + 1
+    end
+
+    tabHeight = math.clamp( tabHeight + ( tabOpen and 20 or -20 ), -352, 32 )
+
+    local tabMatrix = Matrix()
+    tabMatrix:translate( Vector( 0, tabHeight ) )
+    render.pushMatrix( tabMatrix )
+
+    for id, tab in ipairs( tabs ) do
+        local brighten = id == hoveredTab or ( tabOpen and id == tabId )
+        tab.color = math.clamp( tab.color + ( brighten and 10 or -10 ), 75, 255 )
+
+        if tabHeight ~= 0 and id == tabId then
+            tab.draw()
+        end
+    end
+
+    render.popMatrix()
+
+    render.setColor( bgColor )
+    render.drawRect( 0, 0, 512, 32 )
+
+    render.setColor( fgColor )
+    render.drawRect( 127, 6, 2, 20 )
+    render.drawRect( 255, 6, 2, 20 )
+    render.drawRect( 383, 6, 2, 20 )
+
+    render.setFont( timeFont )
+    render.setRGBA( 200, 200, 200, 255 )
+    render.drawText( 448, -2, os.date( "%I:%M %p" ), 1 )
+
+    render.setRGBA( tabs[1].color, tabs[1].color, tabs[1].color, 255 )
+    render.drawRect( 48, 6, 32, 4 )
+    render.drawRect( 48, 14, 32, 4 )
+    render.drawRect( 48, 22, 32, 4 )
+
+    render.setRGBA( tabs[2].color, tabs[2].color, tabs[2].color, 255 )
+    render.drawRect( 190, 6, 4, 20 )
+    render.drawRect( 182, 14, 20, 4 )
+end
+
+hook.add( "RenderBackground", "DrawTabs", drawTabs )
+
+local function handleWindowInputs()
+    if not tabOpen then return end
+
+    if cursorY < 32 or cursorY > 416 then return end
+    if cursorX < 0 or cursorX > 512 then return end
+
+    local tab = tabs[tabId]
+    if not tab then return end
+
+    tab.input( cursorX, cursorY - 32 )
+
+    return true
+end
+
+local function handleTabInputs( button )
+    if button ~= 107 then return end
+
+    if handleWindowInputs() then return end
+
+    if cursorY < 0 or cursorY > 32 then return end
+    if cursorX < 0 or cursorX > 384 then return end
+
+    local id = math.floor( cursorX / 128 ) + 1
+
+    if tabOpen and tabId == id then
+        tabOpen = false
+    else
+        tabOpen = true
+        tabId = id
+    end
+end
+
+hook.add( "InputPressed", "HandleTabInputs", handleTabInputs )

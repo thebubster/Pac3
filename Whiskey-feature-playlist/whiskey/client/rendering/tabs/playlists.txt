@@ -1,0 +1,233 @@
+--@include ../../slider.txt
+
+local slider = require( "../../slider.txt" )
+
+local bgColorAlpha = Color( 0, 0, 0, 150 )
+local fgColorAlpha = Color( 150, 150, 150, 75 )
+
+----local bgColor = Color( 50, 50, 50 )
+local fgColor = Color( 200, 200, 200 )
+
+local white = Color( 255, 255, 255 )
+local transparent = Color( 0, 0, 0, 0 )
+
+local textFont = render.createFont( "Trebuchet", 16, 300, true )
+local textFontBold = render.createFont( "Trebuchet", 16, 600, true )
+local fontSmall = render.createFont( "Trebuchet", 12, 300, true )
+
+local currentlyPlaying = {}
+
+local playingMusicMeta = {
+    __index = function( self, key )
+        if key ~= "duration" then return end
+        if not self.music.obj then return 0 end
+
+        return self.music.obj:getLength()
+    end
+}
+
+function MusicPlayer.playlist:onAdded( obj, index )
+    local music = {
+        name = obj.title,
+        author = obj.author,
+        url = obj.url,
+        music = obj
+    }
+
+    setmetatable( music, playingMusicMeta )
+
+    table.insert( currentlyPlaying, music )
+end
+
+function MusicPlayer.playlist:onRemoved( obj, index )
+    table.remove( currentlyPlaying, index )
+end
+
+local tabs = {
+    {
+        name = "Playlists",
+        playlists = {
+            {
+                name = "All",
+                content = {}
+            },
+            {
+                name = "Now Playing",
+                content = currentlyPlaying
+            }
+        }
+    }
+}
+
+tabs[1].playlists[1].content = Data.music
+local currentPlaylist = tabs[1].playlists[1]
+
+table.sort( currentPlaylist.content, function( a, b )
+    return string.lower( a.name ) < string.lower( b.name )
+end )
+
+local playlistSlideAmount = 0
+
+local function drawListTab( name, contents, offset )
+    render.setColor( fgColorAlpha )
+    render.drawRect( 0, offset, 128, 16 )
+
+    render.setColor( fgColor )
+    render.setFont( textFontBold )
+    render.drawText( 2, offset, name .. string.format( " (%d)", #contents ) )
+
+    local size = #contents * 16
+
+    render.setColor( bgColorAlpha )
+    render.drawRect( 0, offset + 16, 128, size )
+
+    render.setColor( fgColor )
+
+    for i, list in ipairs( contents ) do
+        render.drawText( 8, offset + 16 * i, list.name .. string.format( " (%d)", #list.content ) )
+    end
+
+    return offset + size + 16
+end
+
+render.createRenderTarget( "Playlist" )
+local playlistRT = material.create( "UnlitGeneric" )
+playlistRT:setTextureRenderTarget( "$basetexture", "Playlist" )
+
+local function drawPlaylistsTab()
+    ----render.setColor( bgColorAlpha )
+    ----render.drawRect( 0, 0, 512, 384 )
+
+    local cursorX, cursorY = render.cursorPos()
+    cursorX, cursorY = cursorX or -512, cursorY or -512
+
+    for _, tab in ipairs( tabs ) do
+        drawListTab( tab.name, tab.playlists, 0 )
+    end
+
+    render.setColor( fgColorAlpha )
+    render.drawRect( 136, 0, 376, 28 )
+
+    render.setFont( textFontBold )
+    render.setColor( fgColor )
+    render.drawText( 140, 2, "Playlist: " .. currentPlaylist.name )
+
+    local offset = 0
+    local indexOffset = 0
+
+    if #currentPlaylist.content > 11 then
+        local value = playlistSlideAmount * ( #currentPlaylist.content - 11 )
+        offset = value % 1
+        indexOffset = math.floor( value )
+    end
+
+    local musicId = math.floor( ( cursorY + offset * 32 ) / 32 ) - 1
+
+    if cursorX < 136 or cursorX > 488 then
+        musicId = 0
+    end
+
+    render.selectRenderTarget( "Playlist" )
+    render.clear( transparent )
+
+    render.enableScissorRect( 136, 32, 488, 384)
+
+    for i = 1, 12 do
+        local fg = i == musicId and Color( ( i + indexOffset ) * 10, 0.75, 1 ):hsvToRGB() or fgColor
+
+        local music = currentPlaylist.content[i + indexOffset]
+        if not music then break end
+
+        local height = ( i - offset ) * 32
+
+        local color = bgColorAlpha
+
+        if MusicPlayer.playing and music.url == MusicPlayer.playing.url then
+            color = fgColorAlpha
+        end
+
+        render.setColor( color )
+        render.drawRect( 136, height, 356, 28 )
+
+        render.setFont( textFontBold )
+        render.setColor( fg )
+        render.drawText( 138, height, music.name )
+
+        render.setFont( textFont )
+        local duration = string.format( "%d:%02d", math.floor( music.duration / 60 ), math.floor( music.duration % 60 ) )
+        render.drawSimpleText( 488, height, duration, 2, 0 )
+
+        render.setFont( fontSmall )
+        render.drawText( 138, height + 16, music.author )
+    end
+
+    render.disableScissorRect()
+    render.selectRenderTarget()
+
+    render.setMaterial( playlistRT )
+    render.setColor( white )
+    render.drawTexturedRect( 0, 0, 1024, 1024 )
+
+    if #currentPlaylist.content <= 11 then return end
+
+    render.setColor( bgColorAlpha )
+    render.drawRect( 496, 48, 16, 320 )
+
+    render.setColor( fgColorAlpha )
+    render.drawRect( 496, 32, 16, 16 )
+    render.drawRect( 496, 368, 16, 16 )
+    render.drawRect( 503, 56, 2, 304 )
+
+    render.setColor( fgColor )
+    render.drawRect( 498, 50 + playlistSlideAmount * 304, 12, 12 )
+end
+
+local function playlistTabInput( x, y )
+    local cursor = Vector( x, y )
+
+    if cursor:withinAABox( Vector( 136, 32 ), Vector( 492, 384) ) then
+        local offset = 0
+        local indexOffset = 1
+
+        if #currentPlaylist.content > 11 then
+            local value = playlistSlideAmount * ( #currentPlaylist.content - 11 )
+            offset = value % 1
+            indexOffset = math.floor( value ) + 1
+        end
+
+        local musicId = math.floor( ( ( y + offset * 32 ) - 32 ) / 32 ) + indexOffset
+
+        local music = currentPlaylist.content[musicId]
+        if not music then return end
+
+        MusicPlayer:play( music.name, nil, music.author, music.url, currentPlaylist.name == "Now Playing" )
+    elseif cursor:withinAABox( Vector( 496, 48 ), Vector( 512, 368 ) ) then
+        local playlistSlider = slider:new( 88, 304, "y" )
+
+        function playlistSlider:onChanged( value )
+            playlistSlideAmount = value
+        end
+    elseif cursor:withinAABox( Vector( 32, 0 ), Vector( 128, 384 ) ) then
+        local selectId = math.floor( y / 16 )
+        local curId = 1
+
+        for _, tab in ipairs( tabs ) do
+            for _, playlist in ipairs( tab.playlists ) do
+                if curId == selectId then
+                    currentPlaylist = playlist
+
+                    break
+                end
+
+                curId = curId + 1
+            end
+            curId = curId + 1
+        end
+    end
+end
+
+return {
+    name = "playlists",
+    draw = drawPlaylistsTab,
+    input = playlistTabInput
+}

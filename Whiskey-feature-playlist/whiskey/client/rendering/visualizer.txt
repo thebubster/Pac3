@@ -1,0 +1,114 @@
+local bgColor = Color( 25, 25, 25 )
+
+local emptyFFT = {}
+local fftData = {}
+
+local bgColors = {}
+local fgColors = {}
+
+for i = 1, 64 do
+    emptyFFT[i] = 0
+    fftData[i] = 0
+
+    bgColors[i] = Color( i * 5, 1, 0.5 ):hsvToRGB()
+    fgColors[i] = Color( i * 5, 1, 1 ):hsvToRGB()
+end
+
+local maxParticles = 110
+
+local particles = {}
+local particleTime = {}
+
+local barsPerParticle = 2
+
+local treshold = 30
+
+local function drawParticles()
+    local newParticles = {}
+
+    local curtime = timer.curtime()
+    local frametime = timer.frametime()
+
+    for _, particle in ipairs( particles ) do
+        render.setColor( particle.color )
+
+        local size = particle.size
+        local hsize = size / 2
+
+        render.drawRect( particle.pos.x - hsize, particle.pos.y - hsize, size, size )
+
+        local sidewayMovement = math.sin( curtime + particle.offset ) / 2
+        local upwardsMovement = frametime * particle.speed
+
+        particle.pos.x = particle.pos.x + sidewayMovement
+        particle.pos.y = particle.pos.y - upwardsMovement
+
+        particle.size = particle.size - frametime / 2
+
+        if particle.pos.y > 30 and particle.size > 0 then
+            table.insert( newParticles, particle )
+        end
+    end
+
+    particles = newParticles
+end
+
+local function lerp( v0, v1, t )
+    return v0 + t * (v1 - v0)
+end
+
+local function drawVisualizer()
+    local curtime = timer.curtime()
+
+    render.setColor( bgColor )
+    render.drawRect( 0, 32, 512, 416 )
+
+    render.setRGBA( 200, 200, 200, 255 )
+    render.drawRect( 0, 444, 512, 4 )
+
+    local fft = emptyFFT
+    local music = MusicPlayer.playing
+
+    if music then
+        fft = music.obj:getFFT( 3 )
+
+        if not fft[1] then
+            fft = emptyFFT
+        end
+    end
+
+    for i = 1, 64 do
+        if fft[i] >= fftData[i] then
+            fftData[i] = fft[i]
+        else
+            fftData[i] = lerp( fft[i], fftData[i], 0.925 )
+        end
+
+        local position = ( i - 1 ) * 8
+
+        local foregroundHeight = fftData[i] * math.log( i + 1 ) * 512
+        local backgroundHeight = foregroundHeight * 1.05
+
+        render.setColor( bgColors[i] )
+        render.drawRect( position + 2, 440 - backgroundHeight, 8, backgroundHeight + 4 )
+
+        render.setColor( fgColors[i] )
+        render.drawRect( position, 440 - foregroundHeight, 8, foregroundHeight + 4 )
+
+        if music and #particles < maxParticles and foregroundHeight > treshold and ( i % barsPerParticle == 0 ) and ( particleTime[i] or 0 ) <= curtime then
+            table.insert( particles, {
+                pos = Vector( ( i - 0.5 ) * 8, 440 - foregroundHeight ),
+                color = Color( i * 5, 0.6, 1 ):hsvToRGB(),
+                offset = math.rand( 0, math.pi * 2 ),
+                speed = math.random( 75, 85 ),
+                size = math.rand( 3, 5 )
+            } )
+
+            particleTime[i] = curtime + 1
+        end
+    end
+
+    drawParticles()
+end
+
+hook.add( "RenderBackground", "DrawVisualizer", drawVisualizer )

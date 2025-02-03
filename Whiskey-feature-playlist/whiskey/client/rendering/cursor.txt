@@ -1,0 +1,73 @@
+local lastMoved = 0
+local lastPos = Vector( 0, 0 )
+
+local opaqueTime = 2 -- Time before the cursor starts fading away
+local fadeTime = 2 -- Time it takes for the cursor to entirely fade away
+
+local presses = {}
+
+local pressFadeTime = 0.25 -- How long the press particle shows
+local pressSize = 16 -- The size of the press particle
+
+local function drawPresses()
+    local systime = timer.systime()
+    local newPresses = {}
+
+    for _, press in ipairs( presses ) do
+        local timeAlive = systime - press.time
+        local alpha = 255 - ( timeAlive / pressFadeTime * 255 )
+        local size = timeAlive / pressFadeTime * ( pressSize / 2 )
+
+        render.setRGBA( 255, 255, 255, alpha )
+        render.drawCircle( press.pos.x, press.pos.y, size )
+
+        if timeAlive < pressFadeTime then
+            table.insert( newPresses, press )
+        end
+    end
+
+    presses = newPresses
+end
+
+local function drawCursor()
+    drawPresses()
+
+    local x, y = render.cursorPos()
+    local cursor = Vector( x or -512, y or -512 )
+
+    local cursorIcon = {
+        cursor + Vector( 0, 0 ),
+        cursor + Vector( 12, 4 ),
+        cursor + Vector( 4, 12 ),
+    }
+
+    local systime = timer.systime()
+
+    local timeSinceLastMove = systime - lastMoved
+    local alpha = 255 - ( timeSinceLastMove - opaqueTime ) * ( 255 / fadeTime )
+
+    local color = Color( systime * 36, 0.5, 1 ):hsvToRGB()
+    color.a = math.clamp( alpha, 0, 255 )
+
+    render.setMaterial()
+    render.setColor( color )
+    render.drawPoly( cursorIcon )
+
+    if lastPos == cursor then return end
+
+    lastMoved = systime
+    lastPos = cursor
+end
+
+hook.add( "PostRender", "DrawCursor", drawCursor )
+
+local function cursorPressed( button )
+    if button ~= 107 then return end
+
+    table.insert( presses, {
+        pos = lastPos,
+        time = timer.systime()
+    } )
+end
+
+hook.add( "InputPressed", "CursorPressed", cursorPressed )

@@ -1,0 +1,39 @@
+--@name Whiskey Music Player
+--@author Periapsis
+
+--@shared
+
+--@includedir whiskey
+
+if SERVER then
+    require( "whiskey/sv_whiskey.txt" )
+
+    return
+end
+
+-- TODO: better permission system
+local perms = {"bass.loadURL", "bass.play2D", "file.read"}
+
+local hasPerms = true
+
+for _, perm in ipairs( perms ) do
+    if not hasPermission( perm ) then
+        hasPerms = false
+
+        break
+    end
+end
+
+if hasPerms then
+    require( "whiskey/cl_whiskey.txt" )
+else
+    setupPermissionRequest( perms, "These permissions are required to use the music player", true )
+
+    local function onPermissionsSatisfied()
+        if not permissionRequestSatisfied() then return end
+
+        require( "whiskey/cl_whiskey.txt" )
+    end
+
+    hook.add( "PermissionRequest", "OnPermissionsSatisfied", onPermissionsSatisfied )
+end

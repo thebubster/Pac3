@@ -1,0 +1,143 @@
+--@include music.txt
+--@include list.txt
+
+require( "music.txt" )
+local list = require( "list.txt" )
+
+LOOP_NONE     = 0 -- No looping
+LOOP_PLAYLIST = 1 -- Loop the entire playlist
+LOOP_SINGLE   = 3 -- Loop the currently playing music
+
+MusicPlayer = {}
+
+-- TODO: Play music in order
+MusicPlayer.playlist = list:new()
+MusicPlayer.playlistIndex = 1
+
+MusicPlayer.loopmode = LOOP_NONE
+MusicPlayer.paused = true
+MusicPlayer.volume = 1
+MusicPlayer.muted = false
+
+function MusicPlayer:play( title, album, author, url, findSame, removeSame )
+    if findSame then
+        for id, music in ipairs( self.playlist.content ) do
+            if music.url == url then
+                if self.playing then
+                    self.playing:pause()
+                    self.playing.obj:setTime( 0 )
+                end
+
+                music:play()
+                self.playing = music
+                self.playlistIndex = id
+
+                return
+            end
+        end
+    end
+
+    if removeSame then
+        for _, music in ipairs( self.playlist.content ) do
+            if music.url == url then
+                self.playlist:remove( music.index )
+                self.playlistIndex = self.playlistIndex - 1
+
+                break
+            end
+        end
+    end
+
+    local music = Music:new( title, album, author, url, self.volume )
+    music.index = self.playlist:add( music )
+
+    function music.onFail( obj, reason )
+        self.playlist:remove( obj.index )
+
+        obj:destroy()
+    end
+
+    function music.onLoaded( obj )
+        if obj.index:getIndex() ~= self.playlistIndex then return end
+
+        obj:setVolume( self.volume )
+        obj:play()
+
+        self.playing = obj
+        self.paused = false
+    end
+
+    -- TODO: Add playlist looping support
+    function music.onFinished( obj )
+        if self.playing ~= obj then return end
+
+        if self.loopmode == LOOP_SINGLE then
+            obj:play()
+
+            return true
+        end
+
+        self.playing = nil
+        self.playlistIndex = self.playlistIndex + 1
+
+        if self.playlistIndex > #self.playlist.content and self.loopmode == LOOP_PLAYLIST then
+            self.playlistIndex = 1
+        end
+
+        if self.playlist.content[self.playlistIndex] then
+            self.playing = self.playlist.content[self.playlistIndex]
+            self.playing:play()
+        end
+
+        return true
+    end
+end
+
+function MusicPlayer:setLoopMode( mode )
+    self.loopmode = mode or LOOP_NONE
+end
+
+function MusicPlayer:setVolume( volume, noUnmute )
+    self.volume = volume
+
+    if self.playing then
+        self.playing:setVolume( volume )
+    end
+
+    if noUnmute then return end
+
+    self.unmuteVolume = nil
+    self.muted = false
+end
+
+function MusicPlayer:mute()
+    if self.muted then return end
+
+    self.unmuteVolume = self.volume
+    self:setVolume( 0, true )
+    self.muted = true
+end
+
+function MusicPlayer:unmute()
+    if not self.muted then return end
+
+    self:setVolume( self.unmuteVolume )
+    self.unmuteVolume = nil
+    self.muted = false
+end
+
+function MusicPlayer:pause()
+    if self.paused then return end
+    if not self.playing then return end
+
+    self.playing:pause()
+    self.paused = true
+end
+
+function MusicPlayer:unpause()
+    if not self.paused then return end
+    if not self.playing then return end
+
+    self.playing:play( true )
+    self.paused = false
+end

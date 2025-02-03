@@ -1,0 +1,141 @@
+local colorWarning = Color( 255, 100, 100 )
+local colorInfo = Color( 255, 255, 100 )
+local colorOk = Color( 100, 255, 100 )
+
+local statusColor = colorInfo
+local status = "Info"
+local message = "At least the URL must be given"
+
+local nameCommand = "name"
+local authorCommand = "author"
+local urlCommand = "url"
+
+local name, author, url, duration = "Unknown", "Unknown"
+
+local urlMarkup
+
+local function setDefaultURL()
+    urlMarkup = render.parseMarkup( "<font=Trebuchet18><color=150,150,150>Unknown", 440 )
+end
+
+local function setURL( _url )
+    urlMarkup = render.parseMarkup( "<font=Trebuchet18>" .. _url, 440 )
+end
+
+commands[nameCommand] = function( ... )
+    name = table.concat( {...}, " " )
+end
+
+commands[authorCommand] = function( ... )
+    author = table.concat( {...}, " " )
+end
+
+commands[urlCommand] = function( _url )
+    url = _url
+    setURL( _url )
+
+    local function testMusicDownload( obj )
+        if _url ~= url then
+            return obj:destroy()
+        end
+
+        if not obj then
+            statusColor = colorWarning
+            status = "Warning"
+            message = "No mp3 could be downloaded from given URL"
+        end
+
+        duration = obj:getLength()
+
+        statusColor = colorOk
+        status = "Ok"
+        message = "Successfully downloaded mp3 from URL"
+
+        obj:destroy()
+    end
+
+    statusColor = colorInfo
+    status = "Loading"
+    message = "Downloading mp3..."
+
+    bass.loadURL( _url, "noblock noplay 3d", testMusicDownload )
+end
+
+setDefaultURL()
+
+local colorBackground = Color( 0, 0, 0, 100 )
+
+local colorWhite = Color( 255, 255, 255 )
+local colorBright = Color( 220, 220, 220 )
+local colorDefault = Color( 150, 150, 150 )
+
+local function drawAdditionTab()
+    render.setFont( "Trebuchet18" )
+
+    render.setColor( colorBackground )
+    render.drawRect( 4, 4, 504, 32 )
+    render.drawRect( 4, 40, 504, 32 )
+    render.drawRect( 4, 76, 504, 64 )
+    render.drawRect( 4, 148, 504, 32 )
+    render.drawRect( 192, 188, 128, 32 )
+
+    render.setColor( colorBright )
+    render.drawText( 8, 6, commands.prefix .. nameCommand )
+    render.drawText( 8, 42, commands.prefix .. authorCommand )
+    render.drawText( 8, 78, commands.prefix .. urlCommand )
+
+    render.setColor( name == "Unknown" and colorDefault or colorWhite )
+    render.drawText( 64, 6, name )
+
+    render.setColor( author == "Unknown" and colorDefault or colorWhite )
+    render.drawText( 64, 42, author )
+
+    urlMarkup:draw( 64, 78 )
+
+    render.setColor( statusColor )
+    render.drawText( 8, 150, status )
+    render.setColor( colorBright )
+    render.drawText( 64, 150, message )
+
+    render.setColor( status == "Ok" and colorOk or colorWarning )
+    render.drawRectOutline( 192, 188, 128, 32 )
+    render.setFont( "Trebuchet24" )
+    render.drawSimpleText( 256, 190, "Save", TEXT_ALIGN.CENTER )
+end
+
+local function additionTabInput( x, y )
+    local cursor = Vector( x, y )
+
+    if cursor:withinAABox( Vector( 192, 188 ), Vector( 320, 220 ) ) then
+        if status ~= "Ok" then return end
+
+        local musicInfo = {
+            name = name,
+            author = author,
+            duration = duration,
+            url = url,
+            removed = Data.removed
+        }
+
+        local id = table.insert( Data.music, musicInfo )
+        musicInfo.index = id
+
+        SaveData()
+
+        statusColor = colorInfo
+        status = "Info"
+        message = "At least the URL must be given"
+
+        name = "Unknown"
+        author = "Unknown"
+
+        setDefaultURL()
+        closeTab()
+    end
+end
+
+return {
+    name = "addition",
+    draw = drawAdditionTab,
+    input = additionTabInput
+}

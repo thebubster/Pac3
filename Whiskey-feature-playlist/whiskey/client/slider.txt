@@ -1,0 +1,43 @@
+local Slider = {}
+
+local cursor = Vector( 0, 0 )
+
+local function getCursorPos()
+    local x, y = render.cursorPos()
+
+    if not x then return end
+
+    cursor = Vector( x, y )
+end
+
+hook.add( "Render", "SliderGetCursorPos", getCursorPos )
+
+function Slider:new( start, size, axis )
+    local slider = {}
+
+    slider.id = "Slider_" .. tostring( slider )
+    slider.value = 0
+
+    local function handleSlider()
+        slider.value = math.clamp( ( cursor[axis] - start ) / size, 0, 1 )
+
+        if slider.onChanged then slider:onChanged( slider.value ) end
+    end
+
+    hook.add( "Tick", slider.id, handleSlider )
+
+    local function destroySlider( button )
+        if button ~= 107 then return end
+
+        if slider.onReleased then slider:onReleased() end
+
+        hook.remove( "Tick", slider.id )
+        hook.remove( "InputReleased", slider.id )
+    end
+
+    hook.add( "InputReleased", slider.id, destroySlider )
+
+    return slider
+end
+
+return Slider

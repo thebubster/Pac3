@@ -1,0 +1,149 @@
+Music = {}
+
+Music.cache = {}
+Music.downloading = {}
+
+Music.__index = Music
+
+function Music:__newindex( key, value )
+    rawset( self, key, value )
+
+    if key == "onLoaded" then
+        if not self.obj then return end
+
+        value( self )
+    end
+end
+
+function Music:new( title, album, author, url, volume )
+    local music = {
+        title = title or "Unknown",
+        album = album or "Unknown",
+        author = author or "Unknown",
+        url = url,
+        volume = volume or 1,
+        paused = true,
+        loading = false
+    }
+
+    setmetatable( music, self )
+
+    music:load()
+
+    return music
+end
+
+function Music:load()
+    if self.cache[self.url] then
+        self.obj = self.cache[self.url]
+
+        self:initializeHandler()
+
+        if self.onLoaded then self:onLoaded() end
+
+        return
+    end
+
+    self.loading = true
+
+    local function cacheMusic( bassObj, errNum, errStr )
+        if not bassObj then
+            if self.onFail then self:onFail( errStr ) end
+
+            return
+        end
+
+        self.cache[self.url] = bassObj
+        self.loading = false
+        self.obj = bassObj
+
+        self.obj:setVolume( self.volume )
+
+        self:initializeHandler()
+
+        if self.onLoaded then self:onLoaded() end
+    end
+
+    bass.loadURL( self.url, "2d noblock noplay", cacheMusic )
+end
+
+function Music:initializeHandler()
+    local function handleSpecialBassEvents()
+        if not self.obj then return end
+        if self.paused then return end
+
+        local timestamp = self.obj:getTime()
+
+        if timestamp == self.obj:getLength() then
+            --! Set time is very expensive if skipping a long time and can easily exceed cpu quota
+            self.obj:setTime( 0 )
+            self:pause()
+            self.paused = true
+
+            if self.onFinished and self:onFinished() then return end
+
+            return self:destroy()
+        end
+
+        if timestamp == self.lastTimestamp and not self.paused then
+            self.obj:play( true )
+        end
+
+        self.lastTimestamp = timestamp
+    end
+
+    self.id = tostring( self )
+    self.handler = "HandleSpecialbassEvents_" .. self.id
+    self.lastTimestamp = 0
+
+    hook.add( "Tick", self.handler, handleSpecialBassEvents )
+end
+
+function Music:play( keepTime )
+    self.paused = false
+
+    if not self.onLoaded then
+        function self:onLoaded()
+            self:play()
+        end
+    end
+
+    if not self.obj then return end
+
+    if not keepTime then
+        --! Set time is very expensive if skipping a long time and can easily exceed cpu quota
+        self.obj:setTime( 0 )
+    end
+
+    self.obj:play()
+end
+
+function Music:pause()
+    self.paused = true
+
+    if not self.obj then return end
+
+    self.obj:pause()
+end
+
+function Music:setVolume( volume )
+    self.volume = volume
+
+    if not self.obj then return end
+
+    self.obj:setVolume( volume )
+end
+
+function Music:destroy()
+    if self.handler then
+        hook.remove( "Tick", self.handler )
+    end
+
+    if self.loading then
+        self.destroy = true
+        return
+    end
+
+    self.obj:pause()
+    self = nil
+end

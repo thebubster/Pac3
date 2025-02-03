@@ -1,0 +1,20 @@
+return function( data, path )
+    local newData = {
+        removed = 0,
+        music = {},
+        playlists = {},
+        version = "0.1.0"
+    }
+
+    for name, music in pairs( data.playlists._all ) do
+        local minutes, seconds = string.match( music.duration, "(%d+):(%d+)" )
+        music.duration = ( minutes * 60 ) + seconds
+
+        local id = table.insert( newData.music, music )
+
+        music.index = id
+        music.removed = 0
+    end
+
+    return newData
+end

@@ -1,0 +1,9 @@
+return function( data )
+    for name, music in pairs( data.playlists._all ) do
+        music.name = name
+    end
+
+    data.version = "0.0.1"
+
+    return data
+end

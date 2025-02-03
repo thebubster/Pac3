@@ -1,0 +1,177 @@
+--@include ../slider.txt
+
+local slider = require( "../slider.txt" )
+
+local white = Color( 255, 255, 255 )
+
+local bgColor = Color( 45, 45, 45 )
+local fgColor = Color( 175, 175, 175 )
+
+local dark = Color( 75, 75, 75 )
+
+local playIcon = { Vector( 8, 488 ), Vector( 24, 496 ), Vector( 8, 504 ) }
+
+local loopIconTop = { Vector( 44, 493 ), Vector( 48, 493 ), Vector( 46, 497 ) }
+local loopIconBottom = { Vector( 32, 499 ), Vector( 34, 495 ), Vector( 36, 499 ) }
+
+local loopColors = {
+    [LOOP_NONE] = Color( 75, 75 ,75 ),
+    [LOOP_SINGLE] = Color( 68, 134, 209),
+    [LOOP_PLAYLIST] = Color( 68, 134, 209)
+}
+
+local volumeIcon = material.createFromImage( "icon32/unmuted.png", "noclamp" )
+local noVolumeIcon = material.createFromImage( "icon32/muted.png", "noclamp" )
+
+local cursorX, cursorY = 0, 0
+
+local timeSlider
+
+local function drawMusicInfo()
+    cursorX, cursorY = render.cursorPos()
+
+    render.setMaterial()
+    render.setColor( bgColor )
+    render.drawRect( 0, 448, 512, 64 )
+
+    render.setColor( fgColor )
+
+    if MusicPlayer.paused then
+        render.drawPoly( playIcon )
+    else
+        render.drawRect( 8, 488, 4, 16 )
+        render.drawRect( 20, 488, 4, 16 )
+    end
+
+    local loopIconColor = loopColors[MusicPlayer.loopmode]
+
+    render.setColor( loopIconColor )
+
+    render.drawRect( 33, 489, 14, 2 )
+    render.drawRect( 45, 491, 2, 2 )
+    render.drawPoly( loopIconTop )
+
+    render.drawRect( 33, 501, 14, 2 )
+    render.drawRect( 33, 499, 2, 2 )
+    render.drawPoly( loopIconBottom )
+
+    if MusicPlayer.loopmode == LOOP_SINGLE then
+        render.setFont( "DermaDefault" )
+        render.setFilterMag( 0 )
+        render.drawText( 40.5, 489, "1", 1, 1 )
+        render.setFilterMag( 3 )
+    end
+
+    if MusicPlayer.volume == 0 then
+        render.setMaterial( noVolumeIcon )
+    else
+        render.setMaterial( volumeIcon )
+    end
+
+    render.setFilterMag( 0 )
+    render.setColor( white )
+    render.drawTexturedRect( 422, 486, 20, 20 )
+    render.setFilterMag( 3 )
+
+    render.setColor( dark )
+    render.drawRect( 444, 495, 64, 2 )
+
+    local volumeMult = math.min( MusicPlayer.volume, 2 ) / 2
+
+    render.setRGBA( 100, 100, 100, 255 )
+    render.drawRect( 444, 494, 64 * volumeMult, 4 )
+
+    render.setRGBA( 125, 125, 125, 255 )
+    render.drawRect( 443 + 64 * volumeMult, 492, 2, 8 )
+
+    local time, length = 0, 1
+
+    if MusicPlayer.playing then
+        length = MusicPlayer.playing.obj:getLength()
+
+        if timeSlider then
+            time = timeSlider.value * length
+        else
+            time = MusicPlayer.playing.obj:getTime()
+        end
+
+        render.setFont( "DermaLarge" )
+
+        local title = MusicPlayer.playing.title
+        local size = render.getTextSize( title )
+
+        render.setColor( white )
+        render.drawText( 8, 448, title )
+        render.setFont( "DermaDefault" )
+        render.drawText( 16 + size, 450, MusicPlayer.playing.author )
+    end
+
+    local playtimeMult = time / length
+
+    render.setColor( dark )
+    render.drawRect( 56, 495, 352, 2 )
+
+    render.setColor( Color( timer.curtime() * 18, 0.5, 1 ):hsvToRGB() )
+    render.drawRect( 56, 494, 352 * playtimeMult, 4 )
+
+    render.setColor( white )
+    render.drawRect( 55 + 352 * playtimeMult, 492, 2, 8 )
+end
+
+hook.add( "RenderBackground", "DrawMusicInfo", drawMusicInfo )
+
+local nextLoopState = {
+    [LOOP_NONE] = LOOP_PLAYLIST,
+    [LOOP_SINGLE] = LOOP_NONE,
+    [LOOP_PLAYLIST] = LOOP_SINGLE
+}
+
+local function testInfoInput( button )
+    if button ~= 107 then return end
+
+    local cursor = Vector( cursorX, cursorY )
+
+    -- Play/Pause button
+    if cursor:withinAABox( Vector( 6, 490 ), Vector( 22, 506 ) ) then
+        if MusicPlayer.paused then
+            MusicPlayer:unpause()
+        else
+            MusicPlayer:pause()
+        end
+    -- Loop button
+    elseif cursor:withinAABox( Vector( 32, 490 ), Vector( 48, 506 ) ) then
+        MusicPlayer:setLoopMode( nextLoopState[MusicPlayer.loopmode] )
+    -- Mute/Unmute button
+    elseif cursor:withinAABox( Vector( 424, 488 ), Vector( 440, 504 ) ) then
+        if MusicPlayer.muted then
+            MusicPlayer:unmute()
+        else
+            MusicPlayer:mute()
+        end
+    -- Volume slider
+    elseif cursor:withinAABox( Vector( 444, 490 ), Vector( 508, 506 ) ) then
+        local volumeSlider = slider:new( 444, 64, "x" )
+
+        function volumeSlider:onChanged( value )
+            MusicPlayer:setVolume( value * 2 )
+        end
+    -- Time slider
+    elseif cursor:withinAABox( Vector( 56, 490 ), Vector( 408, 506 ) ) then
+        if not MusicPlayer.playing then return end
+
+        timeSlider = slider:new( 56, 352, "x" )
+
+        function timeSlider:onReleased()
+            timeSlider = nil
+
+            local music = MusicPlayer.playing
+
+            if not music then return end
+
+            --! Set time is very expensive if skipping a long time and can easily exceed cpu quota
+            music.obj:setTime( music.obj:getLength() * self.value )
+        end
+    end
+end
+
+hook.add( "InputPressed", "TestInfoInput", testInfoInput )

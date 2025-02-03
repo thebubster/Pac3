@@ -1,0 +1,8 @@
+--@name Whiskey Server
+--@server
+
+local pos = chip():getPos() + Vector( 0, 0, 52 )
+local ang = Angle( 90, chip():getAngles().yaw, 0 )
+
+local screen = prop.createComponent( pos, ang, "starfall_screen", "models/hunter/plates/plate4x4.mdl", true )
+screen:linkComponent( chip() )

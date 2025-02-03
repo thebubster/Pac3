@@ -1,0 +1,77 @@
+--@name Whiskey Client
+--@client
+
+--@include client/data.txt
+--@include client/musicplayer.txt
+--@include client/rendering/info.txt
+--@include client/rendering/visualizer.txt
+--@include client/rendering/cursor.txt
+--@include client/rendering/tabs.txt
+
+commands = {}
+commands.prefix = "!"
+
+require( "client/data.txt" )
+require( "client/musicplayer.txt" )
+require( "client/rendering/info.txt" )
+require( "client/rendering/visualizer.txt" )
+require( "client/rendering/cursor.txt" )
+require( "client/rendering/tabs.txt" )
+
+local function renderMusicPlayer()
+    hook.run( "RenderBackground" )
+    hook.run( "RenderForeground" )
+    hook.run( "PostRender" )
+end
+
+hook.add( "Render", "RenderMusicPlayer", renderMusicPlayer )
+
+local function handleChatCommands( ply, text )
+    text = string.gsub( text, string.utf8char( 0x200b ), "" )
+
+    if ply ~= player() then return end
+    if text[1] ~= commands.prefix then return end
+
+    local args = string.explode( " ", string.sub( text, 2 ) )
+    local command = table.remove( args, 1 )
+
+    if not commands[command] then return end
+
+    commands[command]( unpack( args ) )
+end
+
+hook.add( "PlayerChat", "HandleChatCommands", handleChatCommands )
+
+function commands.play( url )
+    if not url then
+        if not MusicPlayer.playing then return end
+
+        if MusicPlayer.paused then
+            MusicPlayer:unpause()
+        else
+            MusicPlayer:pause()
+        end
+
+        return
+    end
+
+    MusicPlayer:play( nil, nil, nil, url )
+end
+
+function commands.volume( vol )
+    volume = tonumber( vol )
+
+    MusicPlayer:setVolume( volume )
+end
+
+function commands.pause()
+    if MusicPlayer.paused then
+        return MusicPlayer:unpause()
+    end
+
+    MusicPlayer:pause()
+end
+
+function commands.unpause()
+    MusicPlayer:unpause()
+end

@@ -1,0 +1,6 @@
+"VertexLitGeneric"
+{
+	"$baseTexture"	"models\yuki\amaterasu\amaterasu_kao_bm"
+	"$halflambert"	"1"
+
+}
